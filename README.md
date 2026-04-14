@@ -8,7 +8,7 @@ Build nested CES structures — Armington aggregators, utility functions, produc
 
 ```julia
 using Pkg
-Pkg.add(url="https://github.com/YOURUSER/Armington.jl")
+Pkg.add(url="https://github.com/molivov/Armington.jl")
 ```
 
 ## Quick start
