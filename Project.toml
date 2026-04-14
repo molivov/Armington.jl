@@ -1,0 +1,13 @@
+name = "Armington"
+uuid = "448fece5-6e02-4dfe-bf33-b4920090d0e2"
+authors = ["Mig"]
+version = "0.1.0"
+
+[compat]
+julia = "1.6"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
