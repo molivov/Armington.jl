@@ -31,9 +31,9 @@ aggregate(tree, [10, 5, 8]) # CES composite quantity
 **`CESLeaf(name::Symbol)`**: terminal node (a single good/input). `CESLeaf()` creates an anonymous leaf.
 
 **`CESNode(σ, α, children)`**: interior CES node.
-- `σ` — elasticity of substitution (σ ≥ 0, including `Inf`)
-- `α` — distribution parameters (tuple, one per child)
-- `children` — tuple of `CESNode` or `CESLeaf`
+- `σ`: elasticity of substitution (σ ≥ 0, including `Inf`)
+- `α`: distribution parameters (tuple, one per child)
+- `children`: tuple of `CESNode` or `CESLeaf`
 
 If `children` is omitted, anonymous leaves are created from the length of `α`:
 
