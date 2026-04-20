@@ -99,6 +99,51 @@ using Armington
     end
 
     # ================================================================
+    # Display
+    # ================================================================
+    @testset "Display" begin
+        # Compact show
+        tree = CESNode(1.5, (0.7, 0.3), (CESLeaf(:dom),
+            CESNode(4.0, (0.6, 0.4), (CESLeaf(:US), CESLeaf(:EU)))))
+        str = sprint(show, tree)
+        @test occursin("σ=1.5", str)
+        @test occursin("2 children", str)
+        @test !occursin("└", str)
+
+        # Leaf display
+        @test sprint(show, CESLeaf(:A)) == "CESLeaf(:A)"
+
+        # Named node compact show
+        named = CESNode(2.0, (0.5, 0.5); name=:test)
+        @test occursin("test: CESNode", sprint(show, named))
+
+        # Unnamed compact show
+        @test startswith(sprint(show, CESNode(2.0, (0.5, 0.5))), "CESNode")
+
+        # show_tree: full tree display
+        tree_str = sprint(show_tree, tree)
+        @test occursin("σ=1.5", tree_str)
+        @test occursin("σ=4.0", tree_str)
+        @test occursin("dom", tree_str)
+        @test occursin("US", tree_str)
+        @test occursin("EU", tree_str)
+        @test occursin("└", tree_str)
+
+        # show_tree: anonymous leaves show bullet
+        anon_tree = CESNode(2.0, (0.5, 0.5))
+        anon_str = sprint(show_tree, anon_tree)
+        @test occursin("•", anon_str)
+
+        # show_tree: named nodes
+        named_tree = CESNode(1.5, (0.7, 0.3), (CESLeaf(:dom),
+            CESNode(4.0, (0.6, 0.4), (CESLeaf(:US), CESLeaf(:EU)); name=:imports));
+            name=:total)
+        named_str = sprint(show_tree, named_tree)
+        @test occursin("total: CESNode", named_str)
+        @test occursin("imports: CESNode", named_str)
+    end
+
+    # ================================================================
     # General CES
     # ================================================================
     @testset "General CES" begin
