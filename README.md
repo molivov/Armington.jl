@@ -74,3 +74,17 @@ tree = CESNode(1.5, (0.7, 0.3), (CESLeaf(:domestic), imports))
 
 aggregate(tree, [20.0, 5.0, 4.0, 6.0, 3.0])
 ```
+
+```julia
+show_tree(tree)
+
+total: CESNode(σ=1.5, α=(0.7, 0.3))
+  └ domestic
+  └ imports: CESNode(σ=4.0, α=(0.55, 0.45))
+    └ us: CESNode(σ=8.0, α=(0.5, 0.5))
+      └ US_east
+      └ US_west
+    └ eu: CESNode(σ=8.0, α=(0.6, 0.4))
+      └ EU_north
+      └ EU_south
+```
