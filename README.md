@@ -4,6 +4,8 @@ Recursive CES (constant elasticity of substitution) aggregation over arbitrary n
 
 Build nested CES structures, also called Armington aggregators (utility functions, production functions) and evaluate them in a single call. The nesting topology is encoded in Julia's type system, so each tree compiles to specialized, allocation-free code.
 
+https://en.wikipedia.org/wiki/Constant_elasticity_of_substitution
+
 ## Installation
 
 ```julia
@@ -69,10 +71,14 @@ CESNode(2.0, (0.5, 0.5))  # two anonymous leaves
 | 1 | 0 | Cobb-Douglas | Q = Π (xᵢ / αᵢ)^αᵢ |
 | ∞ | 1 | Linear | Q = Σ αᵢ xᵢ |
 
-Pass `σ = 0.0` or `σ = Inf` for exact limiting cases. The general CES formula is used for all other values.
+Pass `σ = 0`, `σ = 1`, or `σ = Inf` for exact limiting cases. The general CES formula is used for all other values.
 
 ## Three-level example
 
+$$ US = \left( \alpha_{us_1} US_{east}^{\rho_{us}} + \alpha_{us_2} US_{west}^{\rho_{us}} \right)^{1/{\rho_{us}}} $$
+$$ EU = \left( \alpha_{eu_1} EU_{north}^{\rho_{eu}} + \alpha_{eu_2} EU_{south}^{\rho_{eu}} \right)^{1/{\rho_{eu}}} $$
+$$ imports = \left( \alpha_{imp_1} US^{\rho_{imp}} + \alpha_{imp_2} EU^{\rho_{imp}} \right)^{1/{\rho_{imp}}} $$
+$$ Q = \left( \alpha_1 domestic^{\rho} + \alpha_2 imports^{\rho} \right)^{1/{\rho}} $$
 ```julia
 # Varieties within each origin
 us = CESNode(8.0, (0.5, 0.5), (CESLeaf(:US_east), CESLeaf(:US_west)); name=:us)
@@ -84,12 +90,14 @@ imports = CESNode(4.0, (0.55, 0.45), (us, eu); name=:imports)
 # Domestic vs. import composite
 tree = CESNode(1.5, (0.7, 0.3), (CESLeaf(:domestic), imports); name=:total)
 
-aggregate(tree, [20.0, 5.0, 4.0, 6.0, 3.0])
+aggregate(Q, [20.0, 5.0, 4.0, 6.0, 3.0])
 ```
 
 ### Display tree structure
 
 ```
+show_tree(Q)
+
 total: CESNode(σ=1.5, α=(0.7, 0.3))
   └ domestic
   └ imports: CESNode(σ=4.0, α=(0.55, 0.45))
