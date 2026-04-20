@@ -17,23 +17,33 @@ Pkg.add("Armington")
 using Armington
 
 # Two-level Armington: domestic vs. imports (US, EU)
-imports = CESNode(4.0, (0.6, 0.4), (CESLeaf(:US), CESLeaf(:EU)))
-tree = CESNode(1.5, (0.7, 0.3), (CESLeaf(:dom), imports))
+imports = CESNode(4.0, (0.6, 0.4), (CESLeaf(:US), CESLeaf(:EU)); name=:imports)
+tree = CESNode(1.5, (0.7, 0.3), (CESLeaf(:dom), imports); name=:total)
 
-leaf_names(tree)           # [:dom, :US, :EU]
+leaf_names(tree)            # [:dom, :US, :EU]
 aggregate(tree, [10, 5, 8]) # CES composite quantity
+show_tree(tree)             # print nesting structure
+```
+
+```
+total: CESNode(σ=1.5, α=(0.7, 0.3))
+  └ dom
+  └ imports: CESNode(σ=4.0, α=(0.6, 0.4))
+    └ US
+    └ EU
 ```
 
 ## API
 
 ### Types
 
-**`CESLeaf(name::Symbol)`**: terminal node (a single good/input). `CESLeaf()` creates an anonymous leaf.
+**`CESLeaf(name::Symbol)`** — terminal node (a single good/input). `CESLeaf()` creates an anonymous leaf.
 
-**`CESNode(σ, α, children)`**: interior CES node.
+**`CESNode(σ, α, children; name)`**: interior CES node.
 - `σ`: elasticity of substitution (σ ≥ 0, including `Inf`)
 - `α`: distribution parameters (tuple, one per child)
 - `children`: tuple of `CESNode` or `CESLeaf`
+- `name`: optional keyword, a `Symbol` for display purposes
 
 If `children` is omitted, anonymous leaves are created from the length of `α`:
 
@@ -47,7 +57,9 @@ CESNode(2.0, (0.5, 0.5))  # two anonymous leaves
 
 **`leaf_names(tree)`**: return leaf names in the order expected by `aggregate`.
 
-**`CESNode_ρ(ρ, α, children)`**: construct a `CESNode` using ρ = (σ−1)/σ instead of σ. Useful when you think in terms of the substitution parameter directly.
+**`show_tree(tree)`**: print the full nesting structure of the tree.
+
+**`CESNode_ρ(ρ, α, children; name)`**: construct a `CESNode` using ρ = (σ−1)/σ instead of σ. Useful when you think in terms of the substitution parameter directly.
 
 ### Limiting cases
 
@@ -57,27 +69,27 @@ CESNode(2.0, (0.5, 0.5))  # two anonymous leaves
 | 1 | 0 | Cobb-Douglas | Q = Π (xᵢ / αᵢ)^αᵢ |
 | ∞ | 1 | Linear | Q = Σ αᵢ xᵢ |
 
-Pass `σ = 0`, `σ = 1` or `σ = Inf` for exact limiting cases. The general CES formula is used for all other values.
+Pass `σ = 0.0` or `σ = Inf` for exact limiting cases. The general CES formula is used for all other values.
 
 ## Three-level example
 
 ```julia
 # Varieties within each origin
-us = CESNode(8.0, (0.5, 0.5), (CESLeaf(:US_east), CESLeaf(:US_west)))
-eu = CESNode(8.0, (0.6, 0.4), (CESLeaf(:EU_north), CESLeaf(:EU_south)))
+us = CESNode(8.0, (0.5, 0.5), (CESLeaf(:US_east), CESLeaf(:US_west)); name=:us)
+eu = CESNode(8.0, (0.6, 0.4), (CESLeaf(:EU_north), CESLeaf(:EU_south)); name=:eu)
 
 # Origins within imports
-imports = CESNode(4.0, (0.55, 0.45), (us, eu))
+imports = CESNode(4.0, (0.55, 0.45), (us, eu); name=:imports)
 
 # Domestic vs. import composite
-tree = CESNode(1.5, (0.7, 0.3), (CESLeaf(:domestic), imports))
+tree = CESNode(1.5, (0.7, 0.3), (CESLeaf(:domestic), imports); name=:total)
 
 aggregate(tree, [20.0, 5.0, 4.0, 6.0, 3.0])
 ```
 
-```julia
-show_tree(tree)
+### Display tree structure
 
+```
 total: CESNode(σ=1.5, α=(0.7, 0.3))
   └ domestic
   └ imports: CESNode(σ=4.0, α=(0.55, 0.45))
