@@ -88,7 +88,7 @@ eu = CESNode(8.0, (0.6, 0.4), (CESLeaf(:EU_north), CESLeaf(:EU_south)); name=:eu
 imports = CESNode(4.0, (0.55, 0.45), (us, eu); name=:imports)
 
 # Domestic vs. import composite
-tree = CESNode(1.5, (0.7, 0.3), (CESLeaf(:domestic), imports); name=:total)
+Q = CESNode(1.5, (0.7, 0.3), (CESLeaf(:domestic), imports); name=:total)
 
 aggregate(Q, [20.0, 5.0, 4.0, 6.0, 3.0])
 ```
