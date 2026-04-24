@@ -55,15 +55,18 @@ struct CESNode{T<:Real, N, C<:Tuple}
     end
 end
 
+# Promote σ and α to a common type
 function CESNode(σ::Real, α::NTuple{N, Real}, children::Tuple; name::Symbol = Symbol()) where {N}
     T = promote_type(typeof(σ), eltype(α))
     CESNode(convert(T, σ), convert(NTuple{N, T}, α), children; name)
 end
 
+# Convenience: accept vectors / non-tuple iterables
 function CESNode(σ::Real, α, children; name::Symbol = Symbol())
     CESNode(σ, Tuple(α), Tuple(children); name)
 end
 
+# Leaf-free: create anonymous leaves from α length
 function CESNode(σ::Real, α::Union{Tuple, AbstractVector}; name::Symbol = Symbol())
     leaves = ntuple(_ -> CESLeaf(), length(α))
     CESNode(σ, α, leaves; name)
@@ -149,14 +152,15 @@ end
     aggregate(tree, x; method = :standard)
 
 Recursively compute the CES aggregate for `tree`, given a flat vector `x`
-whose entries correspond to leaves in depth-first order.
+whose entries correspond to leaves in depth-first order. This is the
+order from `show_tree`.
 
 For an interior node with elasticity σ and distribution parameters α:
 
 - σ = 0:   U = min(xᵢ / αᵢ)               (Leontief)
 - σ = 1:   U = Π (xᵢ / αᵢ)^αᵢ             (Cobb-Douglas)
 - σ = Inf: U = Σ αᵢ xᵢ                    (Linear)
-- else:    U = (Σ αᵢ xᵢ^ρ0)^(1/ρ)  where ρ = (σ-1)/σ
+- else:    U = (Σ αᵢ xᵢ^ρ)^(1/ρ)  where ρ = (σ-1)/σ
 
 # Keyword arguments
 - `method`: `:standard` (default) uses the direct CES formula with explicit
@@ -212,6 +216,8 @@ end
 _leontief(α::NTuple{N}, x::NTuple{N}) where {N} = minimum(i -> x[i] / α[i], 1:N)
 _linear(α::NTuple{N}, x::NTuple{N}) where {N} = sum(i -> α[i] * x[i], 1:N)
 _cobb_douglas(α::NTuple{N}, x::NTuple{N}) where {N} = prod(i -> (x[i] / α[i])^α[i], 1:N)
+
+# ── Kernels ────────────────────────────────────────────────
 
 """
 Standard CES kernel with explicit branches for limiting cases.
