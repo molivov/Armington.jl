@@ -403,4 +403,131 @@ using Armington
         @test_throws ArgumentError aggregate(tree, [1.0, 2.0]; method = :bogus)
     end
 
+    # ================================================================
+    # Type stability
+    # ================================================================
+    @testset "Type stability" begin
+
+        # ── Flat trees ─────────────────────────────────────────
+    
+        @testset "Flat tree — standard" begin
+            tree = CESNode(2.0, (0.4, 0.6))
+            x = [3.0, 5.0]
+            @test @inferred(aggregate(tree, x)) isa Float64
+        end
+    
+        @testset "Flat tree — lse" begin
+            tree = CESNode(2.0, (0.4, 0.6))
+            x = [3.0, 5.0]
+            @test @inferred(aggregate(tree, x; method = :lse)) isa Float64
+        end
+    
+        # ── Nested tree ────────────────────────────────────────
+    
+        @testset "Nested tree — standard" begin
+            inner = CESNode(4.0, (0.3, 0.7), (CESLeaf(:A), CESLeaf(:B)))
+            tree = CESNode(1.5, (0.5, 0.5), (CESLeaf(:C), inner))
+            x = [1.0, 2.0, 3.0]
+            @test @inferred(aggregate(tree, x)) isa Float64
+        end
+    
+        @testset "Nested tree — lse" begin
+            inner = CESNode(4.0, (0.3, 0.7), (CESLeaf(:A), CESLeaf(:B)))
+            tree = CESNode(1.5, (0.5, 0.5), (CESLeaf(:C), inner))
+            x = [1.0, 2.0, 3.0]
+            @test @inferred(aggregate(tree, x; method = :lse)) isa Float64
+        end
+    
+        # ── Three levels deep ─────────────────────────────────
+    
+        @testset "Three-level nesting" begin
+            bottom = CESNode(3.0, (0.6, 0.4), (CESLeaf(:a), CESLeaf(:b)))
+            mid    = CESNode(2.0, (0.5, 0.5), (bottom, CESLeaf(:c)))
+            top    = CESNode(1.5, (0.7, 0.3), (CESLeaf(:d), mid))
+            x = [1.0, 2.0, 3.0, 4.0]
+            @test @inferred(aggregate(top, x)) isa Float64
+        end
+    
+        # ── Limiting cases ────────────────────────────────────
+    
+        @testset "Leontief (σ = 0)" begin
+            tree = CESNode(0.0, (0.4, 0.6))
+            x = [3.0, 5.0]
+            @test @inferred(aggregate(tree, x)) isa Float64
+        end
+    
+        @testset "Cobb-Douglas (σ = 1)" begin
+            tree = CESNode(1.0, (0.4, 0.6))
+            x = [3.0, 5.0]
+            @test @inferred(aggregate(tree, x)) isa Float64
+        end
+    
+        @testset "Linear (σ = Inf)" begin
+            tree = CESNode(Inf, (0.4, 0.6))
+            x = [3.0, 5.0]
+            @test @inferred(aggregate(tree, x)) isa Float64
+        end
+    
+        # ── Limiting cases nested ─────────────────────────────
+    
+        @testset "Leontief nested in general CES" begin
+            inner = CESNode(0.0, (0.5, 0.5), (CESLeaf(:A), CESLeaf(:B)))
+            tree = CESNode(2.0, (0.6, 0.4), (CESLeaf(:C), inner))
+            x = [1.0, 2.0, 3.0]
+            @test @inferred(aggregate(tree, x)) isa Float64
+        end
+    
+        # ── 3-ary node ────────────────────────────────────────
+    
+        @testset "3-ary node" begin
+            tree = CESNode(2.5, (0.3, 0.3, 0.4))
+            x = [1.0, 2.0, 3.0]
+            @test @inferred(aggregate(tree, x)) isa Float64
+        end
+    
+        # ── Kernel-level stability ────────────────────────────
+    
+        @testset "Kernels" begin
+            α = (0.4, 0.6)
+            xv = (3.0, 5.0)
+            @test @inferred(Armington._ces(2.0, α, xv))         isa Float64
+            @test @inferred(Armington._ces(0.0, α, xv))         isa Float64
+            @test @inferred(Armington._ces(1.0, α, xv))         isa Float64
+            @test @inferred(Armington._ces(Inf, α, xv))         isa Float64
+            @test @inferred(Armington._ces_lse(2.0, α, xv))     isa Float64
+            @test @inferred(Armington._ces_lse(1.0, α, xv))     isa Float64
+            @test @inferred(Armington._leontief(α, xv))         isa Float64
+            @test @inferred(Armington._linear(α, xv))           isa Float64
+            @test @inferred(Armington._cobb_douglas(α, xv))     isa Float64
+        end
+    
+        # ── Internal recursion ────────────────────────────────
+    
+        @testset "_compute and _collect_children" begin
+            inner = CESNode(4.0, (0.3, 0.7), (CESLeaf(:A), CESLeaf(:B)))
+            tree = CESNode(1.5, (0.5, 0.5), (CESLeaf(:C), inner))
+            x = [1.0, 2.0, 3.0]
+    
+            # _compute on a leaf returns (Float64, Int)
+            @test @inferred(Armington._compute(CESLeaf(:A), x, 1, :standard)) isa Tuple{Float64, Int}
+    
+            # _compute on a node returns (Float64, Int)
+            @test @inferred(Armington._compute(tree, x, 1, :standard)) isa Tuple{Float64, Int}
+    
+            # _collect_children on empty tuple
+            @test @inferred(Armington._collect_children((), x, 1, :standard)) isa Tuple{Tuple{}, Int}
+    
+            # _collect_children on the tree's children
+            @test @inferred(Armington._collect_children(tree.children, x, 1, :standard)) isa Tuple{<:Tuple, Int}
+        end
+    
+        # ── BigFloat propagation ──────────────────────────────
+    
+        @testset "BigFloat stability" begin
+            tree = CESNode(big"2.0", (big"0.5", big"0.5"))
+            x = [big"4.0", big"9.0"]
+            @test @inferred(aggregate(tree, x)) isa BigFloat
+        end
+
+    end
 end
