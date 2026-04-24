@@ -26,11 +26,11 @@ Interior node in a CES nesting tree.
 
 # Arguments
 - `σ`: Elasticity of substitution (σ ≥ 0). Special cases:
-        σ = 0    → Leontief (perfect complements)
+        σ = 0    → Leontief
         σ = 1    → Cobb-Douglas
-        σ = Inf  → Linear (perfect substitutes)
+        σ = Inf  → Linear
 - `α`: Distribution parameters. A `Tuple` of length `N`, one per child.
-        These enter the CES directly: U = [Σ αᵢ xᵢ^ρ]^(1/ρ) with ρ = (σ-1)/σ.
+        These enter the CES directly: U = (Σ αᵢ xᵢ^ρ)^(1/ρ) with ρ = (σ-1)/σ.
 - `children`: `Tuple` of `CESNode` or `CESLeaf`, one per distribution parameter.
 
 If `children` is omitted, anonymous leaves are created automatically
@@ -38,12 +38,6 @@ If `children` is omitted, anonymous leaves are created automatically
 
     CESNode(2.0, (0.5, 0.5))  # equivalent to CESNode(2.0, (0.5, 0.5), (CESLeaf(), CESLeaf()))
 
-The type parameter `T` is the numeric type of σ and α. This is inferred
-automatically and allows the tree parameters to carry AD dual numbers,
-arbitrary-precision types, etc.
-
-The nesting structure is encoded in the type, so Julia compiles specialized code
-for each tree topology.
 """
 struct CESNode{T<:Real, N, C<:Tuple}
     name::Symbol
@@ -61,18 +55,15 @@ struct CESNode{T<:Real, N, C<:Tuple}
     end
 end
 
-# Promote σ and α to a common type
 function CESNode(σ::Real, α::NTuple{N, Real}, children::Tuple; name::Symbol = Symbol()) where {N}
     T = promote_type(typeof(σ), eltype(α))
     CESNode(convert(T, σ), convert(NTuple{N, T}, α), children; name)
 end
 
-# Convenience: accept vectors / non-tuple iterables
 function CESNode(σ::Real, α, children; name::Symbol = Symbol())
     CESNode(σ, Tuple(α), Tuple(children); name)
 end
 
-# Leaf-free: create anonymous leaves from α length
 function CESNode(σ::Real, α::Union{Tuple, AbstractVector}; name::Symbol = Symbol())
     leaves = ntuple(_ -> CESLeaf(), length(α))
     CESNode(σ, α, leaves; name)
@@ -164,8 +155,8 @@ For an interior node with elasticity σ and distribution parameters α:
 
 - σ = 0:   U = min(xᵢ / αᵢ)               (Leontief)
 - σ = 1:   U = Π (xᵢ / αᵢ)^αᵢ             (Cobb-Douglas)
-- σ = Inf: U = Σ αᵢ xᵢ                     (Linear)
-- else:    U = [Σ αᵢ xᵢ^ρ]^(1/ρ)  where ρ = (σ-1)/σ
+- σ = Inf: U = Σ αᵢ xᵢ                    (Linear)
+- else:    U = (Σ αᵢ xᵢ^ρ0)^(1/ρ)  where ρ = (σ-1)/σ
 
 # Keyword arguments
 - `method`: `:standard` (default) uses the direct CES formula with explicit
@@ -174,8 +165,6 @@ For an interior node with elasticity σ and distribution parameters α:
   additional transcendental function evaluations. Use `:lse` when σ is
   a parameter being estimated and may pass through 1.
 
-Returns a scalar whose type is determined by promotion of the tree
-parameter type and the element type of `x`.
 """
 function aggregate(tree::CESTree, x::AbstractVector; method::Symbol = :standard)
     length(x) == _nleaves(tree) || throw(DimensionMismatch(
@@ -184,23 +173,38 @@ function aggregate(tree::CESTree, x::AbstractVector; method::Symbol = :standard)
     method ∈ (:standard, :lse) || throw(ArgumentError(
         "method must be :standard or :lse, got :$method."
     ))
-    _aggregate(tree, x, Ref(1), method)
-end
-
-# ── Internal recursion ─────────────────────────────────────
-
-function _aggregate(leaf::CESLeaf, x::AbstractVector, idx::Ref{Int}, method::Symbol)
-    val = x[idx[]]
-    idx[] += 1
+    val, _ = _compute(tree, x, 1, method)
     return val
 end
 
-function _aggregate(node::CESNode{T, N}, x::AbstractVector, idx::Ref{Int}, method::Symbol) where {T, N}
-    child_vals = ntuple(N) do i
-        _aggregate(node.children[i], x, idx, method)
-    end
+# ── Internal recursion ─────────────────────────────────────
+#
+# Every function returns (value, next_index). The index is a plain
+# Int passed by value.
+
+function _compute(::CESLeaf, x::AbstractVector, idx::Int, ::Symbol)
+    return x[idx], idx + 1
+end
+
+function _compute(node::CESNode{T,N}, x::AbstractVector, idx::Int, method::Symbol) where {T,N}
+    child_vals, idx = _collect_children(node.children, x, idx, method)
     kernel = method === :lse ? _ces_lse : _ces
-    return kernel(node.σ, node.α, child_vals)
+    return kernel(node.σ, node.α, child_vals), idx
+end
+
+# ── Recursive tuple peeling ───────────────────────────────
+#
+# Processes children left to right. Each call peels the first
+# element with children[1] and shrinks the rest with Base.tail.
+
+function _collect_children(::Tuple{}, ::AbstractVector, idx::Int, ::Symbol)
+    return (), idx
+end
+
+function _collect_children(children::Tuple, x::AbstractVector, idx::Int, method::Symbol)
+    val, idx = _compute(children[1], x, idx, method)
+    rest, idx = _collect_children(Base.tail(children), x, idx, method)
+    return (val, rest...), idx
 end
 
 # ── Regimes ────────────────────────────────────────────────
@@ -208,8 +212,6 @@ end
 _leontief(α::NTuple{N}, x::NTuple{N}) where {N} = minimum(i -> x[i] / α[i], 1:N)
 _linear(α::NTuple{N}, x::NTuple{N}) where {N} = sum(i -> α[i] * x[i], 1:N)
 _cobb_douglas(α::NTuple{N}, x::NTuple{N}) where {N} = prod(i -> (x[i] / α[i])^α[i], 1:N)
-
-# ── Kernels ────────────────────────────────────────────────
 
 """
 Standard CES kernel with explicit branches for limiting cases.
