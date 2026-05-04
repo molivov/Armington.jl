@@ -108,3 +108,7 @@ total: CESNode(σ=1.5, α=(0.7, 0.3))
       └ EU_north
       └ EU_south
 ```
+
+## AI Disclosure
+
+This package was developed with the assistance of Claude (Anthropic). All code has been reviewed, tested, and validated by the author.
