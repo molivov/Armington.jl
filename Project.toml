@@ -1,7 +1,7 @@
 name = "Armington"
 uuid = "448fece5-6e02-4dfe-bf33-b4920090d0e2"
 authors = ["Miguel Olivo-Villabrille"]
-version = "0.3.1"
+version = "0.3.2"
 
 [compat]
 julia = "1.6"
