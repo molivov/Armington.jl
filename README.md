@@ -2,7 +2,7 @@
 
 Recursive CES (constant elasticity of substitution) aggregation over arbitrary nesting trees.
 
-Build nested CES structures, also called Armington aggregators (utility functions, production functions) and evaluate them in a single call. The nesting topology is encoded in Julia's type system, so each tree compiles to specialized, allocation-free code.
+Build nested CES structures (utility functions, production functions), also called Armington aggregators, and evaluate them in a single call. The nesting topology is encoded in Julia's type system, so each tree compiles to specialized, allocation-free code.
 
 https://en.wikipedia.org/wiki/Constant_elasticity_of_substitution
 
