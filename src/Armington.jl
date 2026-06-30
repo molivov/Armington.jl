@@ -1,6 +1,6 @@
 module Armington
 
-export CESLeaf, CESNode, aggregate, leaf_names, CESNode_ρ, show_tree
+export CESLeaf, CES, CESNode, aggregate, leaf_names, CES_ρ, CESNode_ρ, show_tree
 
 # ─────────────────────────────────────────────────────────────
 # Types
@@ -20,7 +20,7 @@ CESLeaf(name::AbstractString) = CESLeaf(Symbol(name))
 CESLeaf() = CESLeaf(Symbol())
 
 """
-    CESNode(σ, α, children)
+    CES(σ, α, children)
 
 Interior node in a CES nesting tree.
 
@@ -31,53 +31,79 @@ Interior node in a CES nesting tree.
         σ = Inf  → Linear
 - `α`: Distribution parameters. A `Tuple` of length `N`, one per child.
         These enter the CES directly: U = (Σ αᵢ xᵢ^ρ)^(1/ρ) with ρ = (σ-1)/σ.
-- `children`: `Tuple` of `CESNode` or `CESLeaf`, one per distribution parameter.
+- `children`: `Tuple` of `CES`, `CESLeaf`, `Symbol`, or `AbstractString` (one per
+        distribution parameter). Symbols and strings are converted to named
+        `CESLeaf` instances, so `CES(σ, (0.5, 0.5), (:steel, :aluminum))` is
+        shorthand for `CES(σ, (0.5, 0.5), (CESLeaf(:steel), CESLeaf(:aluminum)))`.
 
 If `children` is omitted, anonymous leaves are created automatically
 (one per element of α):
 
-    CESNode(2.0, (0.5, 0.5))  # equivalent to CESNode(2.0, (0.5, 0.5), (CESLeaf(), CESLeaf()))
+    CES(2.0, (0.5, 0.5))  # equivalent to CES(2.0, (0.5, 0.5), (CESLeaf(), CESLeaf()))
 
 """
-struct CESNode{T<:Real, N, C<:Tuple}
+struct CES{T<:Real, N, C<:Tuple}
     name::Symbol
     σ::T
     α::NTuple{N, T}
     children::C
 
-    function CESNode(σ::T, α::NTuple{N, T}, children::C; name::Symbol = Symbol()) where {T<:Real, N, C<:Tuple}
-        length(children) == N || throw(ArgumentError(
-            "Length of α ($(N)) must equal number of children ($(length(children)))."
+    function CES(σ::T, α::NTuple{N, T}, children::Tuple; name::Symbol = Symbol()) where {T<:Real, N}
+        normalized = map(_to_leaf, children)
+        length(normalized) == N || throw(ArgumentError(
+            "Length of α ($(N)) must equal number of children ($(length(normalized)))."
         ))
         σ >= 0 || throw(ArgumentError("Elasticity σ must be non-negative, got $σ."))
         all(a -> a > 0, α) || throw(ArgumentError("All distribution parameters α must be positive."))
-        new{T, N, C}(name, σ, α, children)
+        C = typeof(normalized)
+        new{T, N, C}(name, σ, α, normalized)
     end
 end
 
 # Promote σ and α to a common type
-function CESNode(σ::Real, α::NTuple{N, Real}, children::Tuple; name::Symbol = Symbol()) where {N}
-    T = promote_type(typeof(σ), eltype(α))
-    CESNode(convert(T, σ), convert(NTuple{N, T}, α), children; name)
+function CES(σ::Real, α::NTuple{N, Real}, children::Tuple; name::Symbol = Symbol()) where {N}
+    T = promote_type(typeof(σ), typeof.(α)...)
+    CES(convert(T, σ), convert(NTuple{N, T}, α), children; name)
 end
 
 # Convenience: accept vectors / non-tuple iterables
-function CESNode(σ::Real, α, children; name::Symbol = Symbol())
-    CESNode(σ, Tuple(α), Tuple(children); name)
+function CES(σ::Real, α, children; name::Symbol = Symbol())
+    CES(σ, Tuple(α), Tuple(children); name)
 end
 
 # Leaf-free: create anonymous leaves from α length
-function CESNode(σ::Real, α::Union{Tuple, AbstractVector}; name::Symbol = Symbol())
+function CES(σ::Real, α::Union{Tuple, AbstractVector}; name::Symbol = Symbol())
     leaves = ntuple(_ -> CESLeaf(), length(α))
-    CESNode(σ, α, leaves; name)
+    CES(σ, α, leaves; name)
 end
 
-const CESTree = Union{CESLeaf, CESNode}
+# Normalize a child input to a tree element. Symbols and strings are
+# promoted to named leaves; existing leaves and nodes pass through.
+# Anything else throws with an informative message; this is what lets
+# `CES(σ, α, (:steel, :aluminum))` work as shorthand for
+# `CES(σ, α, (CESLeaf(:steel), CESLeaf(:aluminum)))`.
+_to_leaf(s::Symbol) = CESLeaf(s)
+_to_leaf(s::AbstractString) = CESLeaf(s)
+_to_leaf(l::CESLeaf) = l
+_to_leaf(n::CES) = n
+_to_leaf(x) = throw(ArgumentError(
+    "Children must be CESLeaf, CES, Symbol, or AbstractString, got $(typeof(x))."
+))
+
+const CESTree = Union{CESLeaf, CES}
 
 """
-    CESNode_ρ(ρ, α, children)
+    CESNode
 
-Construct a `CESNode` parametrized by ρ = (σ-1)/σ instead of σ.
+Alias for [`CES`](@ref). Retained for compatibility with code written
+against earlier versions of the package; `CES` is the canonical name.
+"""
+const CESNode = CES
+
+"""
+    CES_ρ(ρ, α, children)
+
+Construct a `CES` parametrized by ρ = (σ-1)/σ instead of σ.
 
 The mapping is σ = 1/(1-ρ), with ρ ∈ (-∞, 1):
 - ρ → -∞  ⟹  σ → 0   (Leontief)
@@ -86,11 +112,19 @@ The mapping is σ = 1/(1-ρ), with ρ ∈ (-∞, 1):
 
 The node stores σ internally; this is purely a convenience for construction.
 """
-function CESNode_ρ(ρ::Real, α, children; name::Symbol = Symbol())
+function CES_ρ(ρ::Real, α, children; name::Symbol = Symbol())
     ρ < 1 || throw(ArgumentError("ρ must be < 1, got $ρ."))
     σ = 1 / (1 - ρ)
-    CESNode(σ, α, children; name)
+    CES(σ, α, children; name)
 end
+
+"""
+    CESNode_ρ
+
+Alias for [`CES_ρ`](@ref). Retained for compatibility with code written
+against earlier versions of the package; `CES_ρ` is the canonical name.
+"""
+const CESNode_ρ = CES_ρ
 
 # ─────────────────────────────────────────────────────────────
 # Tree introspection
@@ -103,23 +137,27 @@ Return leaf names in depth-first order. This is the order in which
 a flat input vector is expected by `aggregate`.
 """
 leaf_names(leaf::CESLeaf) = [leaf.name]
-leaf_names(node::CESNode) = mapreduce(leaf_names, vcat, node.children)
+leaf_names(node::CES) = mapreduce(leaf_names, vcat, node.children)
 
 """Number of leaves in the tree."""
 _nleaves(::CESLeaf) = 1
-_nleaves(node::CESNode) = sum(_nleaves, node.children)
+_nleaves(node::CES) = sum(_nleaves, node.children)
 
 # ─────────────────────────────────────────────────────────────
 # Display
 # ─────────────────────────────────────────────────────────────
 
 function Base.show(io::IO, leaf::CESLeaf)
-    print(io, "CESLeaf(:", leaf.name, ")")
+    if leaf.name == Symbol()
+        print(io, "CESLeaf()")
+    else
+        print(io, "CESLeaf(:", leaf.name, ")")
+    end
 end
 
-function Base.show(io::IO, node::CESNode{T,N}) where {T,N}
+function Base.show(io::IO, node::CES{T,N}) where {T,N}
     label = node.name == Symbol() ? "" : string(node.name, ": ")
-    print(io, label, "CESNode(σ=", node.σ, ", α=", node.α, ", ", N, " children)")
+    print(io, label, "CES(σ=", node.σ, ", α=", node.α, ", ", N, " children)")
 end
 
 """
@@ -136,9 +174,9 @@ function _show_tree(io::IO, leaf::CESLeaf, depth::Int, prefix::String)
     println(io, "  "^depth, prefix, label)
 end
 
-function _show_tree(io::IO, node::CESNode{T,N}, depth::Int, prefix::String) where {T,N}
+function _show_tree(io::IO, node::CES{T,N}, depth::Int, prefix::String) where {T,N}
     label = node.name == Symbol() ? "" : string(node.name, ": ")
-    println(io, "  "^depth, prefix, label, "CESNode(σ=", node.σ, ", α=", node.α, ")")
+    println(io, "  "^depth, prefix, label, "CES(σ=", node.σ, ", α=", node.α, ")")
     for i in 1:N
         _show_tree(io, node.children[i], depth + 1, "└ ")
     end
@@ -190,7 +228,7 @@ function _compute(::CESLeaf, x::AbstractVector, idx::Int, ::Symbol)
     return x[idx], idx + 1
 end
 
-function _compute(node::CESNode{T,N}, x::AbstractVector, idx::Int, method::Symbol) where {T,N}
+function _compute(node::CES{T,N}, x::AbstractVector, idx::Int, method::Symbol) where {T,N}
     child_vals, idx = _collect_children(node.children, x, idx, method)
     kernel = method === :lse ? _ces_lse : _ces
     return kernel(node.σ, node.α, child_vals), idx

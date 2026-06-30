@@ -19,18 +19,18 @@ Pkg.add("Armington")
 using Armington
 
 # Two-level Armington: domestic vs. imports (US, EU)
-imports = CESNode(4.0, (0.6, 0.4), (CESLeaf(:US), CESLeaf(:EU)); name=:imports)
-tree = CESNode(1.5, (0.7, 0.3), (CESLeaf(:dom), imports); name=:total)
+imports = CES(4.0, (0.6, 0.4), (:US, :EU); name=:imports)
+tree = CES(1.5, (0.7, 0.3), (:dom, imports); name=:total)
 
 leaf_names(tree)            # [:dom, :US, :EU]
 aggregate(tree, [10, 5, 8]) # CES composite quantity
 show_tree(tree)             # print nesting structure
 ```
 
-```
-total: CESNode(σ=1.5, α=(0.7, 0.3))
+```julia
+total: CES(σ=1.5, α=(0.7, 0.3))
   └ dom
-  └ imports: CESNode(σ=4.0, α=(0.6, 0.4))
+  └ imports: CES(σ=4.0, α=(0.6, 0.4))
     └ US
     └ EU
 ```
@@ -41,17 +41,20 @@ total: CESNode(σ=1.5, α=(0.7, 0.3))
 
 **`CESLeaf(name::Symbol)`** — terminal node (a single good/input). `CESLeaf()` creates an anonymous leaf.
 
-**`CESNode(σ, α, children; name)`**: interior CES node.
+**`CES(σ, α, children; name)`**: interior CES node.
 - `σ`: elasticity of substitution (σ ≥ 0, including `Inf`)
 - `α`: distribution parameters (tuple, one per child)
-- `children`: tuple of `CESNode` or `CESLeaf`
+- `children`: tuple of `CES`, `CESLeaf`, `Symbol`, or `AbstractString`. Symbols and strings are converted to named leaves, so `(:steel, :aluminum)` is shorthand for `(CESLeaf(:steel), CESLeaf(:aluminum))`.
 - `name`: optional keyword, a `Symbol` for display purposes
 
 If `children` is omitted, anonymous leaves are created from the length of `α`:
 
 ```julia
-CESNode(2.0, (0.5, 0.5))  # two anonymous leaves
+CES(2.0, (0.5, 0.5))                    # two anonymous leaves
+CES(2.0, (0.5, 0.5), (:steel, :alum))   # two named leaves via symbol shorthand
 ```
+
+> `CESNode` and `CESNode_ρ` are aliases for `CES` and `CES_ρ`, for compatibility with code written against earlier versions.
 
 ### Functions
 
@@ -61,7 +64,7 @@ CESNode(2.0, (0.5, 0.5))  # two anonymous leaves
 
 **`show_tree(tree)`**: print the full nesting structure of the tree.
 
-**`CESNode_ρ(ρ, α, children; name)`**: construct a `CESNode` using ρ = (σ−1)/σ instead of σ. Useful when you think in terms of the substitution parameter directly.
+**`CES_ρ(ρ, α, children; name)`**: construct a `CES` using ρ = (σ−1)/σ instead of σ. Useful when you think in terms of the substitution parameter directly.
 
 ### Limiting cases
 
@@ -81,30 +84,30 @@ $$ imports = \left( \alpha_{imp_1} US^{\rho_{imp}} + \alpha_{imp_2} EU^{\rho_{im
 $$ Q = \left( \alpha_1 domestic^{\rho} + \alpha_2 imports^{\rho} \right)^{1/{\rho}} $$
 ```julia
 # Varieties within each origin
-us = CESNode(8.0, (0.5, 0.5), (CESLeaf(:US_east), CESLeaf(:US_west)); name=:us)
-eu = CESNode(8.0, (0.6, 0.4), (CESLeaf(:EU_north), CESLeaf(:EU_south)); name=:eu)
+us = CES(8.0, (0.5, 0.5), (:US_east, :US_west); name=:us)
+eu = CES(8.0, (0.6, 0.4), (:EU_north, :EU_south); name=:eu)
 
 # Origins within imports
-imports = CESNode(4.0, (0.55, 0.45), (us, eu); name=:imports)
+imports = CES(4.0, (0.55, 0.45), (us, eu); name=:imports)
 
 # Domestic vs. import composite
-Q = CESNode(1.5, (0.7, 0.3), (CESLeaf(:domestic), imports); name=:total)
+Q = CES(1.5, (0.7, 0.3), (:domestic, imports); name=:total)
 
 aggregate(Q, [20.0, 5.0, 4.0, 6.0, 3.0])
 ```
 
 ### Display tree structure
 
-```
+```julia
 show_tree(Q)
 
-total: CESNode(σ=1.5, α=(0.7, 0.3))
+total: CES(σ=1.5, α=(0.7, 0.3))
   └ domestic
-  └ imports: CESNode(σ=4.0, α=(0.55, 0.45))
-    └ us: CESNode(σ=8.0, α=(0.5, 0.5))
+  └ imports: CES(σ=4.0, α=(0.55, 0.45))
+    └ us: CES(σ=8.0, α=(0.5, 0.5))
       └ US_east
       └ US_west
-    └ eu: CESNode(σ=8.0, α=(0.6, 0.4))
+    └ eu: CES(σ=8.0, α=(0.6, 0.4))
       └ EU_north
       └ EU_south
 ```
